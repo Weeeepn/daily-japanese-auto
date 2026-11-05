@@ -26,17 +26,14 @@ async function run() {
   ]
   `;
 
-  // 使用 v1beta 端點與 gemini-2.5-flash 模型
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  // 改用通用相容的 gemini-pro 模型
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
 
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
+      contents: [{ parts: [{ text: prompt }] }]
     })
   });
 
@@ -52,7 +49,15 @@ async function run() {
     process.exit(1);
   }
 
-  const rawText = data.candidates[0].content.parts[0].text;
+  let rawText = data.candidates[0].content.parts[0].text.trim();
+  
+  // 清理可能夾帶的 markdown 標籤
+  if (rawText.startsWith("```json")) {
+    rawText = rawText.replace(/^```json/, "").replace(/```$/, "").trim();
+  } else if (rawText.startsWith("```")) {
+    rawText = rawText.replace(/^```/, "").replace(/```$/, "").trim();
+  }
+
   const parsedData = JSON.parse(rawText);
   fs.writeFileSync('today.json', JSON.stringify(parsedData, null, 2), 'utf-8');
   console.log("今日單字生成成功！已儲存至 today.json");
