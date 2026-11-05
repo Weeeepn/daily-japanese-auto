@@ -3,24 +3,24 @@ const fs = require('fs');
 async function run() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error("Missing GEMINI_API_KEY");
+    console.error("錯誤：找不到 GEMINI_API_KEY 環境變數！");
     process.exit(1);
   }
 
   const prompt = `
-  請隨機選出 5 個實用的日文生活單字（難度約 N4~N3），並生成標準 JSON 格式。
-  不得輸出任何 Markdown 標籤或額外文字，只輸出合法 JSON 陣列。
-  格式規範如下：
+  請隨機選出 5 個實用的生活日文單字（難度約 N4~N3），並生成標準 JSON 格式。
+  絕對不要加入任何 Markdown 標籤（不要加 \`\`\`json 或 \`\`\`），只要單純的 JSON 陣列字串。
+  格式如下：
   [
     {
-      "word": "漢字或單字本體",
-      "kana": "假名標音",
-      "meaning": "中文意思",
-      "exampleJa": "日文例句",
-      "exampleZh": "例句中文翻譯",
+      "word": "散歩",
+      "kana": "さんぽ",
+      "meaning": "散步",
+      "exampleJa": "朝の公園を散歩します。",
+      "exampleZh": "在早晨的公園散步。",
       "dialogue": [
-        { "speaker": "A", "ja": "角色A日文", "zh": "中文翻譯" },
-        { "speaker": "B", "ja": "角色B日文", "zh": "中文翻譯" }
+        { "speaker": "A", "ja": "一緒に散歩しませんか？", "zh": "要不要一起去散步？" },
+        { "speaker": "B", "ja": "いいですね、行きましょう！", "zh": "好啊，走吧！" }
       ]
     }
   ]
@@ -40,15 +40,27 @@ async function run() {
   });
 
   const data = await response.json();
+
+  // 如果 API 報錯，將詳細訊息印出來
+  if (data.error) {
+    console.error("Gemini API 回傳錯誤：", JSON.stringify(data.error, null, 2));
+    process.exit(1);
+  }
+
+  if (!data.candidates || !data.candidates[0]) {
+    console.error("未能取得候選內容，API 回傳結果為：", JSON.stringify(data, null, 2));
+    process.exit(1);
+  }
+
   const rawText = data.candidates[0].content.parts[0].text;
   
-  // 驗證是否為有效 JSON 並存檔
+  // 驗證是否為合法 JSON
   const parsedData = JSON.parse(rawText);
   fs.writeFileSync('today.json', JSON.stringify(parsedData, null, 2), 'utf-8');
-  console.log("Successfully generated today.json");
+  console.log("今日單字生成成功！已儲存至 today.json");
 }
 
 run().catch(err => {
-  console.error(err);
+  console.error("執行過程發生異常：", err);
   process.exit(1);
 });
