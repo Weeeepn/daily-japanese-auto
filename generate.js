@@ -1,5 +1,17 @@
 const fs = require('fs');
 
+async function generateWithModel(modelName, apiKey, prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }]
+    })
+  });
+  return await response.json();
+}
+
 async function run() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -26,42 +38,50 @@ async function run() {
   ]
   `;
 
-  // 改用新用戶支援的 gemini-3.8-flash
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
+  // 設定備援模型清單：若第一個塞車，會依序嘗試下一個
+  const candidateModels = [
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite"
+  ];
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
-    })
-  });
+  let successData = null;
 
-  const data = await response.json();
+  for (const model of candidateModels) {
+    console.log(`嘗試使用模型：${model} ...`);
+    try {
+      const data = await generateWithModel(model, apiKey, prompt);
 
-  if (data.error) {
-    console.error("Gemini API 回傳錯誤：", JSON.stringify(data.error, null, 2));
+      if (data.error) {
+        console.warn(`模型 ${model} 回報錯誤 (${data.error.code})：${data.error.message}`);
+        continue; // 嘗試下一個模型
+      }
+
+      if (data.candidates && data.candidates[0]) {
+        let rawText = data.candidates[0].content.parts[0].text.trim();
+        if (rawText.startsWith("```json")) {
+          rawText = rawText.replace(/^```json/, "").replace(/```$/, "").trim();
+        } else if (rawText.startsWith("```")) {
+          rawText = rawText.replace(/^```/, "").replace(/```$/, "").trim();
+        }
+        successData = JSON.parse(rawText);
+        console.log(`成功透過 ${model} 生成今日單字！`);
+        break;
+      }
+    } catch (e) {
+      console.warn(`模型 ${model} 呼叫失敗，切換下一組...`);
+    }
+  }
+
+  if (!successData) {
+    console.error("所有備援模型皆忙線或失敗，請稍後再試。");
     process.exit(1);
   }
 
-  if (!data.candidates || !data.candidates[0]) {
-    console.error("未能取得內容：", JSON.stringify(data, null, 2));
-    process.exit(1);
-  }
-
-  let rawText = data.candidates[0].content.parts[0].text.trim();
-  
-  // 清理可能包含的 Markdown 標記
-  if (rawText.startsWith("```json")) {
-    rawText = rawText.replace(/^```json/, "").replace(/```$/, "").trim();
-  } else if (rawText.startsWith("```")) {
-    rawText = rawText.replace(/^```/, "").replace(/```$/, "").trim();
-  }
-
-  const parsedData = JSON.parse(rawText);
-  // 正式寫入 today.json
-  fs.writeFileSync('today.json', JSON.stringify(parsedData, null, 2), 'utf-8');
-  console.log("今日單字生成成功！已儲存至 today.json");
+  fs.writeFileSync('today.json', JSON.stringify(successData, null, 2), 'utf-8');
+  console.log("已順利存入 today.json！");
 }
 
 run().catch(err => {
