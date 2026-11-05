@@ -26,7 +26,8 @@ async function run() {
   ]
   `;
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // 使用 v1beta 端點與 gemini-2.5-flash 模型
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -41,26 +42,23 @@ async function run() {
 
   const data = await response.json();
 
-  // 如果 API 報錯，將詳細訊息印出來
   if (data.error) {
     console.error("Gemini API 回傳錯誤：", JSON.stringify(data.error, null, 2));
     process.exit(1);
   }
 
   if (!data.candidates || !data.candidates[0]) {
-    console.error("未能取得候選內容，API 回傳結果為：", JSON.stringify(data, null, 2));
+    console.error("未能取得內容：", JSON.stringify(data, null, 2));
     process.exit(1);
   }
 
   const rawText = data.candidates[0].content.parts[0].text;
-  
-  // 驗證是否為合法 JSON
   const parsedData = JSON.parse(rawText);
   fs.writeFileSync('today.json', JSON.stringify(parsedData, null, 2), 'utf-8');
   console.log("今日單字生成成功！已儲存至 today.json");
 }
 
 run().catch(err => {
-  console.error("執行過程發生異常：", err);
+  console.error("執行異常：", err);
   process.exit(1);
 });
