@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>每日日文 5 單字（AI 全自動）</title>
+  <style>
+    :root {
+      --primary: #d94844;
+      --bg: #f8f9fa;
+      --card-bg: #ffffff;
+      --text: #2c3e50;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Meiryo", sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      margin: 0;
+      padding: 20px;
+    }
+    .container { max-width: 760px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 25px; }
+    header h1 { color: var(--primary); margin-bottom: 6px; }
+    .date-badge {
+      display: inline-block;
+      background: #ffe3e3;
+      color: var(--primary);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 0.95rem;
+    }
+    .word-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      border-left: 5px solid var(--primary);
+    }
+    .word-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 12px;
+      border-bottom: 1px dashed #eee;
+      padding-bottom: 10px;
+    }
+    .kanji { font-size: 1.8rem; font-weight: bold; }
+    .kana { font-size: 1.1rem; color: #666; }
+    .meaning { font-size: 1.1rem; font-weight: 500; margin-left: auto; color: #333; }
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #888;
+      text-transform: uppercase;
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+    .content-box { background: #fafafa; padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; }
+    .dialogue-line { margin-bottom: 6px; }
+    .speaker { font-weight: bold; color: var(--primary); }
+    .audio-btn {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 6px;
+      vertical-align: middle;
+      transition: all 0.2s;
+    }
+    .audio-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .translation { font-size: 0.9rem; color: #777; margin-top: 2px; }
+    .loading { text-align: center; font-size: 1.2rem; color: #888; margin-top: 40px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>每日日文 5 單字</h1>
+      <div class="date-badge" id="current-date">載入中...</div>
+    </header>
+
+    <main id="word-list">
+      <div class="loading">正在載入今日內容...</div>
+    </main>
+  </div>
+
+  <script>
+    function speakJapanese(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    async function loadTodayWords() {
+      const today = new Date();
+      document.getElementById('current-date').innerText = 
+        `今日進度：${today.getFullYear()} 年 ${today.getMonth() + 1} 月 ${today.getDate()} 日`;
+
+      try {
+        // 加入時間戳記避免瀏覽器讀取舊快取
+        const res = await fetch(`today.json?t=${new Date().getTime()}`);
+        if (!res.ok) throw new Error("尚未生成今日單字");
+        const words = await res.json();
+
+        const container = document.getElementById('word-list');
+        container.innerHTML = words.map(item => `
+          <div class="word-card">
+            <div class="word-header">
+              <span class="kanji">${item.word}</span>
+              <span class="kana">（${item.kana}）</span>
+              <button class="audio-btn" onclick="speakJapanese('${item.kana || item.word}')" title="朗讀單字">🔊</button>
+              <span class="meaning">${item.meaning}</span>
+            </div>
+
+            <div class="section-title">實用例句</div>
+            <div class="content-box">
+              <div>
+                <span>${item.exampleJa}</span>
+                <button class="audio-btn" onclick="speakJapanese('${item.exampleJa}')" title="朗讀例句">🔊</button>
+              </div>
+              <div class="translation">${item.exampleZh}</div>
+            </div>
+
+            <div class="section-title">情境對話</div>
+            <div class="content-box">
+              ${item.dialogue.map(d => `
+                <div class="dialogue-line">
+                  <span class="speaker">${d.speaker}:</span> ${d.ja}
+                  <button class="audio-btn" onclick="speakJapanese('${d.ja}')" title="朗讀">🔊</button>
+                  <div class="translation" style="margin-left: 20px;">${d.zh}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        document.getElementById('word-list').innerHTML = `
+          <div class="loading">
+            今日單字尚未生成。若是第一次建立，請先到 GitHub 的 Actions 頁面手動點擊「Run workflow」觸發一次！
+          </div>
+        `;
+      }
+    }
+
+    loadTodayWords();
+  </script>
+</body>
+</html>
